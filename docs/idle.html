@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MRTG Monitor</title>
+<style>
+  :root {
+    --bg: #0a1122; --panel: #0f1a33; --panel2: #0c1628;
+    --border: #1c2a4a; --border2: #243356;
+    --text: #e7eefb; --muted: #8294b5; --faint: #56688c;
+    --blue: #3b82f6; --blue2: #60a5fa; --blue-deep: #1d4ed8;
+    --ok: #34d399; --warn: #fbbf24; --bad: #f87171; --idle: #a78bfa;
+    --na: #64748b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(1100px 500px at 85% -10%, rgba(59,130,246,.16), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(29,78,216,.12), transparent 60%),
+      var(--bg);
+    color: var(--text); -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  a { color: var(--blue2); }
+  svg.ic { width: 18px; height: 18px; stroke: currentColor; fill: none;
+           stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+           flex: none; }
+
+  .app { display: flex; min-height: 100vh; }
+
+  /* ============ SIDEBAR ============ */
+  aside.side {
+    width: 232px; flex: none; padding: 20px 14px;
+    background: linear-gradient(180deg, #0d1731 0%, #0a1122 100%);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 22px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; padding: 2px 10px; }
+  .logo .mark { width: 34px; height: 34px; border-radius: 10px; flex: none;
+    background: linear-gradient(135deg, var(--blue-deep), var(--blue2));
+    display: grid; place-items: center; color: #fff;
+    box-shadow: 0 4px 18px rgba(59, 130, 246, .45); }
+  .logo .name { font-size: 15px; font-weight: 800; letter-spacing: .01em; }
+  .logo .name small { display: block; font-size: 10.5px; font-weight: 600;
+    color: var(--faint); letter-spacing: .12em; text-transform: uppercase; }
+  nav.menu { display: flex; flex-direction: column; gap: 4px; }
+  nav.menu a {
+    display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+    border-radius: 10px; text-decoration: none; font-size: 13.5px;
+    font-weight: 600; color: var(--muted); border: 1px solid transparent;
+    transition: background .15s, color .15s;
+  }
+  nav.menu a:hover { background: rgba(59, 130, 246, .08); color: var(--text); }
+  nav.menu a.active {
+    background: linear-gradient(90deg, rgba(59,130,246,.18), rgba(59,130,246,.06));
+    border-color: rgba(59, 130, 246, .35); color: #dbeafe;
+  }
+  nav.menu a.active svg.ic { color: var(--blue2); }
+  nav.menu .cnt { margin-left: auto; font-size: 11.5px; font-weight: 700;
+    padding: 1px 8px; border-radius: 999px; background: #16233f;
+    color: var(--muted); border: 1px solid var(--border); }
+  nav.menu .cnt.warn { background: rgba(251,191,36,.12); color: var(--warn); border-color: rgba(251,191,36,.3); }
+  nav.menu .cnt.bad { background: rgba(248,113,113,.12); color: var(--bad); border-color: rgba(248,113,113,.3); }
+  nav.menu .cnt.idle { background: rgba(167,139,250,.12); color: var(--idle); border-color: rgba(167,139,250,.3); }
+  .side-foot { margin-top: auto; padding: 12px; border-radius: 12px;
+    background: var(--panel2); border: 1px solid var(--border);
+    font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--ok); margin-right: 6px;
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, .6); animation: pulse 2s infinite; }
+  .pulse.stale { background: var(--bad); box-shadow: none; animation: none; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .5); }
+    70% { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+  }
+
+  /* ============ KONTEN ============ */
+  .content { flex: 1; min-width: 0; padding: 26px 30px 60px; max-width: 1160px; }
+  .topbar { display: flex; justify-content: space-between; align-items: flex-start;
+            gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .topbar h2 { margin: 0 0 4px; font-size: 21px; font-weight: 800; letter-spacing: -.01em; }
+  .topbar h2 .count { color: var(--blue2); }
+  .topbar .note { margin: 0; font-size: 13px; color: var(--muted); max-width: 640px; }
+
+  /* --- kartu ringkasan --- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+           gap: 12px; margin-bottom: 20px; }
+  .card { --chip: var(--blue2);
+    background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)), var(--panel);
+    border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    transition: border-color .15s, transform .15s;
+  }
+  .card:hover { border-color: var(--border2); transform: translateY(-1px); }
+  .card .num { font-size: 26px; font-weight: 800; letter-spacing: -.03em; }
+  .card .label { font-size: 11px; color: var(--muted); font-weight: 600;
+                 text-transform: uppercase; letter-spacing: .07em; margin-top: 2px; }
+  .card .ico { width: 40px; height: 40px; border-radius: 11px; flex: none;
+    display: grid; place-items: center; color: var(--chip);
+    background: color-mix(in srgb, var(--chip) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--chip) 28%, transparent); }
+  .card.ok { --chip: var(--ok); } .card.warn { --chip: var(--warn); }
+  .card.bad { --chip: var(--bad); } .card.idle { --chip: var(--idle); }
+
+  /* --- panel visualisasi --- */
+  .charts { display: grid; grid-template-columns: 260px 1fr; gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 860px) { .charts { grid-template-columns: 1fr; } }
+  .chart { background: var(--panel); border: 1px solid var(--border);
+           border-radius: 14px; padding: 16px 18px; }
+  .chart h3 { margin: 0 0 12px; font-size: 11.5px; color: var(--muted);
+              text-transform: uppercase; letter-spacing: .09em; font-weight: 700; }
+  .donut-wrap { display: flex; align-items: center; gap: 16px; }
+  .donut-wrap svg { filter: drop-shadow(0 0 10px rgba(59, 130, 246, .35)); }
+  .donut-label { font-size: 12px; color: var(--muted); }
+  .donut-label strong { display: block; font-size: 22px; color: var(--text); }
+  .stackbar { display: flex; height: 20px; border-radius: 999px; overflow: hidden;
+              margin-bottom: 12px; background: var(--panel2); }
+  .stackbar div { min-width: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 9px 16px; font-size: 12px; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px;
+      border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+  .hbar { display: grid; grid-template-columns: 92px 1fr 54px; gap: 10px;
+          align-items: center; font-size: 12.5px; margin-bottom: 7px; }
+  .hbar .sid { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hbar .track { background: var(--panel2); border-radius: 6px; height: 14px;
+                 border: 1px solid var(--border); }
+  .hbar .fill { height: 100%; border-radius: 5px; min-width: 2px;
+    background-image: linear-gradient(90deg, rgba(255,255,255,.25), rgba(255,255,255,0));
+    box-shadow: 0 0 8px color-mix(in srgb, currentColor 40%, transparent); }
+  .hbar .val { text-align: right; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* --- form pencarian --- */
+  form.search { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+                background: var(--panel); border: 1px solid var(--border);
+                border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+  form.search .field { display: flex; flex-direction: column; gap: 5px; }
+  form.search label { font-size: 10.5px; text-transform: uppercase; font-weight: 700;
+                      letter-spacing: .09em; color: var(--faint); }
+  input, select { font-family: inherit; }
+  form.search input, form.search select { padding: 8px 11px; font-size: 13.5px;
+      width: 200px; border: 1px solid var(--border2); border-radius: 9px;
+      background: var(--panel2); color: var(--text);
+      transition: border-color .15s, box-shadow .15s; }
+  form.search input::placeholder { color: var(--faint); }
+  input:focus, select:focus { outline: none; border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .22); }
+  button { font-family: inherit; }
+  .btn, form.search button, form.reason button, form.fu button {
+      font-size: 13px; font-weight: 700; border: none; color: #fff;
+      background: linear-gradient(135deg, var(--blue-deep), var(--blue));
+      border-radius: 9px; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(59, 130, 246, .35);
+      transition: filter .15s, transform .1s; }
+  .btn:hover, form.search button:hover, form.reason button:hover, form.fu button:hover {
+      filter: brightness(1.15); }
+  form.search button { padding: 9px 20px; }
+  form.search a.reset { font-size: 13px; color: var(--muted); padding: 9px 4px;
+      text-decoration: none; }
+  form.search a.reset:hover { color: var(--bad); }
+  .search-info { font-size: 13px; color: var(--muted); margin: -4px 0 12px; }
+
+  /* --- tabel --- */
+  .tablewrap { background: var(--panel); border: 1px solid var(--border);
+               border-radius: 14px; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+  th { font-size: 10.5px; text-transform: uppercase; font-weight: 700;
+       letter-spacing: .09em; color: var(--faint); white-space: nowrap;
+       background: var(--panel2); }
+  th a { color: inherit; text-decoration: none; }
+  th a:hover { color: var(--blue2); }
+  th .arrow { opacity: .5; }
+  th .arrow.on { opacity: 1; color: var(--blue2); }
+  tr:not(:first-child):hover td { background: rgba(59, 130, 246, .05); }
+  tr:last-child td { border-bottom: none; }
+  td strong { font-weight: 700; }
+  .badge { display: inline-block; padding: 2.5px 10px; border-radius: 999px;
+           font-size: 11.5px; font-weight: 700; border: 1px solid transparent; }
+  .badge.ok { background: rgba(52,211,153,.1); color: var(--ok); border-color: rgba(52,211,153,.25); }
+  .badge.warn { background: rgba(251,191,36,.1); color: var(--warn); border-color: rgba(251,191,36,.25); }
+  .badge.bad { background: rgba(248,113,113,.1); color: var(--bad); border-color: rgba(248,113,113,.25); }
+  .badge.idle { background: rgba(167,139,250,.1); color: var(--idle); border-color: rgba(167,139,250,.25); }
+  .badge.na { background: rgba(100,116,139,.12); color: var(--muted); border-color: rgba(100,116,139,.3); }
+  .muted { color: var(--muted); font-size: 12px; }
+
+  form.reason { display: flex; gap: 7px; }
+  form.reason input[type=text] { flex: 1; padding: 7px 10px; font-size: 13px;
+      border: 1px solid var(--border2); border-radius: 9px; min-width: 180px;
+      background: var(--panel2); color: var(--text); }
+  form.reason input::placeholder { color: var(--faint); }
+  form.reason button { padding: 7px 14px; }
+
+  /* --- tindak lanjut anomali --- */
+  form.fu { display: flex; gap: 7px; align-items: center; }
+  form.fu select { padding: 6px 8px; font-size: 12.5px; border-radius: 9px;
+      border: 1px solid var(--border2); font-weight: 700; background: var(--panel2); }
+  form.fu select.st- { color: var(--bad); }
+  form.fu select.st-dicek { color: var(--blue2); }
+  form.fu select.st-dihubungi { color: var(--idle); }
+  form.fu select.st-tiket { color: var(--warn); }
+  form.fu select.st-selesai { color: var(--ok); }
+  form.fu input[type=text] { width: 130px; padding: 6px 9px; font-size: 12.5px;
+      border: 1px solid var(--border2); border-radius: 9px;
+      background: var(--panel2); color: var(--text); }
+  form.fu input::placeholder { color: var(--faint); }
+  form.fu button { padding: 6px 13px; font-size: 12.5px; }
+  .fu-meta { display: block; margin-top: 4px; }
+  .belum-chip { display: inline-block; background: rgba(248,113,113,.12);
+      color: var(--bad); border: 1px solid rgba(248,113,113,.3);
+      border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700;
+      margin-left: 8px; vertical-align: 2px; }
+
+  .empty { padding: 34px; text-align: center; color: var(--muted);
+           background: var(--panel); border: 1px dashed var(--border2);
+           border-radius: 14px; }
+  .pager { display: flex; gap: 12px; align-items: center; justify-content: center;
+           margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .pager a { color: var(--text); text-decoration: none; font-weight: 600;
+             background: var(--panel); border: 1px solid var(--border2);
+             border-radius: 999px; padding: 6px 16px; transition: border-color .15s; }
+  .pager a:hover { border-color: var(--blue); }
+  h2 { color: var(--text); }
+  .h2-note { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+
+  /* --- responsif --- */
+  @media (max-width: 900px) {
+    .app { flex-direction: column; }
+    aside.side { width: 100%; height: auto; position: static;
+                 flex-direction: column; gap: 12px; padding: 14px; }
+    nav.menu { flex-direction: row; overflow-x: auto; }
+    nav.menu a { white-space: nowrap; }
+    .side-foot { display: none; }
+    .content { padding: 18px 16px 50px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="side">
+  <div class="logo">
+    <span class="mark">
+      <svg class="ic" viewBox="0 0 24 24"><polyline points="3 13 7 13 10 6 14 18 17 11 21 11"/></svg>
+    </span>
+    <span class="name">MRTG Monitor<small>Network Ops</small></span>
+  </div>
+
+  <nav class="menu">
+    <a href="index.html" class="">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      Semua SID <span class="cnt">20</span>
+    </a>
+    <a href="coverage.html" class="">
+      <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/></svg>
+      Belum ada MRTG <span class="cnt bad">3</span>
+    </a>
+    <a href="nearlimit.html" class="">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M20.2 15.5a8.5 8.5 0 1 0-16.4 0"/><line x1="12" y1="13" x2="15.5" y2="9.5"/></svg>
+      Mendekati Limit <span class="cnt warn">2</span>
+    </a>
+    <a href="putus.html" class="">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M10.3 4.2 2.6 17.5a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 4.2a1.9 1.9 0 0 0-3.4 0z"/><line x1="12" y1="9.5" x2="12" y2="13.5"/><line x1="12" y1="16.6" x2="12" y2="16.7"/></svg>
+      Grafik Putus <span class="cnt bad">1</span>
+    </a>
+    <a href="idle.html" class="active">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg>
+      Trafik Nol <span class="cnt idle">2</span>
+    </a>
+  </nav>
+
+  <div class="side-foot">
+    
+      <span class="pulse"></span><strong>Analisis terakhir</strong><br>2026-07-03 11:08
+    
+  </div>
+</aside>
+
+<div class="content">
+
+
+<div class="topbar">
+  <div>
+    <h2>SID dengan trafik nol / hampir nol <span class="count">2</span> <span class="belum-chip">2 belum ditangani</span></h2>
+    
+      <p class="note">Trafik terus di bawah 1% dari BW kontrak selama ≥ 14 hari — indikasi layanan tidak dipakai pelanggan.</p>
+    
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card"><div><div class="num">20</div><div class="label">Total SID</div></div>
+    <span class="ico"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span></div>
+  <div class="card ok"><div><div class="num">17</div><div class="label">Sudah ada MRTG</div></div>
+    <span class="ico"><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span></div>
+  <div class="card bad"><div><div class="num">3</div><div class="label">Belum ada MRTG</div></div>
+    <span class="ico"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/></svg></span></div>
+  <div class="card warn"><div><div class="num">2</div><div class="label">Mendekati Limit</div></div>
+    <span class="ico"><svg class="ic" viewBox="0 0 24 24"><path d="M20.2 15.5a8.5 8.5 0 1 0-16.4 0"/><line x1="12" y1="13" x2="15.5" y2="9.5"/></svg></span></div>
+  <div class="card bad"><div><div class="num">1</div><div class="label">Grafik Putus</div></div>
+    <span class="ico"><svg class="ic" viewBox="0 0 24 24"><path d="M10.3 4.2 2.6 17.5a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 4.2a1.9 1.9 0 0 0-3.4 0z"/><line x1="12" y1="9.5" x2="12" y2="13.5"/><line x1="12" y1="16.6" x2="12" y2="16.7"/></svg></span></div>
+  <div class="card idle"><div><div class="num">2</div><div class="label">Trafik Nol</div></div>
+    <span class="ico"><svg class="ic" viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></span></div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+<form class="search" method="get" action="/">
+  <input type="hidden" name="tab" value="idle">
+  <div class="field">
+    <label for="sid">Cari SID</label>
+    <input type="search" id="sid" name="sid" value="" placeholder="mis. LNK-007">
+  </div>
+  <div class="field">
+    <label for="cust">Cari Pelanggan</label>
+    <input type="search" id="cust" name="cust" value="" placeholder="mis. Bank Nusantara">
+  </div>
+  
+  <div class="field">
+    <label for="fu">Tindak lanjut</label>
+    <select id="fu" name="fu">
+      <option value="">Semua status</option>
+      <option value="belum" >Belum ditangani</option>
+      
+      <option value="dicek" >Sedang dicek</option>
+      
+      <option value="dihubungi" >Pelanggan dihubungi</option>
+      
+      <option value="tiket" >Tiket dibuat</option>
+      
+      <option value="selesai" >Selesai</option>
+      
+    </select>
+  </div>
+  
+  <button type="submit">Cari</button>
+  
+</form>
+
+
+
+  <div class="tablewrap">
+  <table>
+    <tr><th><a href="?tab=idle&amp;sort=link_id&amp;dir=asc">SID
+    <span class="arrow ">↕</span></a></th><th><a href="?tab=idle&amp;sort=customer&amp;dir=asc">Pelanggan
+    <span class="arrow ">↕</span></a></th><th><a href="?tab=idle&amp;sort=bandwidth_mbps&amp;dir=asc">BW Kontrak
+    <span class="arrow ">↕</span></a></th><th><a href="?tab=idle&amp;sort=peak_util_pct&amp;dir=asc">Puncak
+    <span class="arrow ">↕</span></a></th><th><a href="?tab=idle&amp;sort=idle_days&amp;dir=asc">Lama idle
+    <span class="arrow on">↓</span></a></th><th>Tindak lanjut</th></tr>
+    
+    <tr>
+      <td><strong>LNK-009</strong></td>
+      <td>PT Retail Jaya</td>
+      <td>20 Mbps</td>
+      <td>0.1%</td>
+      <td><span class="badge idle">15.0 hari</span></td>
+      
+  <td>
+    <form class="fu" method="post" action="/followup">
+      <input type="hidden" name="link_id" value="LNK-009">
+      <input type="hidden" name="alert_type" value="idle">
+      <select name="status" class="st-"
+              onchange="this.className='st-'+this.value">
+        
+        <option value="" selected>Belum ditangani</option>
+        
+        <option value="dicek" >Sedang dicek</option>
+        
+        <option value="dihubungi" >Pelanggan dihubungi</option>
+        
+        <option value="tiket" >Tiket dibuat</option>
+        
+        <option value="selesai" >Selesai</option>
+        
+      </select>
+      <input type="text" name="note" value="" placeholder="mis. tiket #123">
+      <button type="submit">Simpan</button>
+    </form>
+    
+  </td>
+
+    </tr>
+    
+    <tr>
+      <td><strong>LNK-015</strong></td>
+      <td>PT Konstruksi Prima</td>
+      <td>50 Mbps</td>
+      <td>0.1%</td>
+      <td><span class="badge idle">15.0 hari</span></td>
+      
+  <td>
+    <form class="fu" method="post" action="/followup">
+      <input type="hidden" name="link_id" value="LNK-015">
+      <input type="hidden" name="alert_type" value="idle">
+      <select name="status" class="st-"
+              onchange="this.className='st-'+this.value">
+        
+        <option value="" selected>Belum ditangani</option>
+        
+        <option value="dicek" >Sedang dicek</option>
+        
+        <option value="dihubungi" >Pelanggan dihubungi</option>
+        
+        <option value="tiket" >Tiket dibuat</option>
+        
+        <option value="selesai" >Selesai</option>
+        
+      </select>
+      <input type="text" name="note" value="" placeholder="mis. tiket #123">
+      <button type="submit">Simpan</button>
+    </form>
+    
+  </td>
+
+    </tr>
+    
+  </table>
+  </div>
+  
+  
+
+
+
+
+</div>
+</div>
+
+<style>
+  .demo-ribbon { position: fixed; top: 14px; right: -44px; z-index: 99;
+    transform: rotate(38deg); background: linear-gradient(135deg,#b45309,#f59e0b);
+    color: #fff; font: 700 11px/1 Inter, system-ui, sans-serif;
+    letter-spacing: .12em; padding: 7px 50px; box-shadow: 0 3px 12px rgba(0,0,0,.4);
+    pointer-events: none; }
+</style>
+<div class="demo-ribbon">DEMO STATIS</div>
+<script>
+  // Demo statis: aksi simpan/cari membutuhkan aplikasi server aslinya.
+  document.querySelectorAll('form').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      alert('Ini demo statis (data contoh).\n\nMenyimpan dan mencari hanya berfungsi di aplikasi aslinya \u2014 lihat petunjuk instalasi di README repo ini.');
+    });
+  });
+</script>
+</body>
+</html>
