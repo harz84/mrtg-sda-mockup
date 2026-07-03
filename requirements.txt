@@ -1,0 +1,5 @@
+flask>=3.0
+pyyaml>=6.0
+# Opsional, sesuai sumber inventory:
+# pymysql>=1.1        # inventory.source: mysql
+# psycopg2-binary>=2.9  # inventory.source: postgres

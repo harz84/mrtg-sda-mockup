@@ -1,0 +1,76 @@
+# Konfigurasi mrtg-monitor
+# Salin file ini menjadi config.yaml lalu sesuaikan.
+
+rrd:
+  # Direktori tempat file .rrd MRTG berada
+  dir: /var/mrtg/rrd
+  # Pola nama file RRD per link. {link_id} diganti dengan ID link dari inventory.
+  pattern: "{link_id}.rrd"
+  # Satuan nilai di RRD: MRTG default menghitung bytes/detik -> "bytes".
+  # Jika counter Anda sudah dalam bit/detik, ganti ke "bits".
+  unit: bytes
+  # Nama data source di dalam RRD (MRTG + rrdtool default: ds0 = in, ds1 = out)
+  ds_in: ds0
+  ds_out: ds1
+
+inventory:
+  # Sumber daftar induk link: csv | mysql | postgres
+  source: mysql
+  # Untuk source: csv
+  csv_path: inventory.csv
+  # Untuk source: mysql / postgres.
+  # Query WAJIB mengembalikan kolom: link_id, customer, bandwidth_mbps
+  sql:
+    host: 127.0.0.1
+    port: 3306
+    user: monitor
+    password: ""  # isi di config.yaml Anda (file itu di-gitignore, tidak ikut ter-push)
+    database: noc
+    query: >
+      SELECT circuit_id AS link_id,
+             customer_name AS customer,
+             bandwidth_mbps
+      FROM services
+      WHERE status = 'ACTIVE'
+
+thresholds:
+  # Link dianggap mendekati limit jika puncak harian >= persen ini
+  # pada masing-masing dari N hari terakhir yang ada datanya.
+  near_limit_pct: 80
+  near_limit_days: 3
+  # Grafik dianggap putus jika tidak ada data valid selama >= jam ini.
+  gap_hours: 6
+  # Link dianggap tidak terpakai jika trafik terus-menerus di bawah persen
+  # ini dari BW kontrak selama >= hari ini.
+  zero_pct: 1
+  zero_days: 14
+
+alerts:
+  # Kirim juga notifikasi saat kondisi pulih/normal kembali
+  notify_recovery: true
+  telegram:
+    enabled: false
+    bot_token: ""
+    chat_id: ""
+  email:
+    enabled: false
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    smtp_user: ""
+    smtp_password: ""
+    use_tls: true
+    from: mrtg-monitor@example.com
+    to:
+      - noc@example.com
+
+web:
+  host: 0.0.0.0
+  port: 8080
+
+# Lokasi database SQLite internal (hasil analisis, alasan, status alert)
+db_path: monitor.db
+
+# Jumlah thread paralel saat membaca file RRD.
+# Untuk puluhan ribu SID, 16-32 membuat satu siklus analisis tetap
+# selesai dalam beberapa menit.
+workers: 8
